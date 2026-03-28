@@ -1,0 +1,118 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-doc-processing-api",
+    "name": "Doc Processing API",
+    "description": "NestJS document processing jobs API.\n\nSet `baseUrl` (default `http://localhost:3000`) to match your `PORT` in `.env`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Root",
+      "item": [
+        {
+          "name": "GET /",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/",
+            "description": "App root (hello endpoint)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Submit job (multipart — file)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Document file; use this OR `fileUrl` in a separate request.",
+                  "src": []
+                },
+                {
+                  "key": "webhookUrl",
+                  "type": "text",
+                  "value": "",
+                  "description": "Optional callback URL when job completes."
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/jobs/submit",
+            "description": "Submit a document as **multipart/form-data**. Provide `file` **or** send \"Submit job (multipart — fileUrl)\" with `fileUrl` instead."
+          }
+        },
+        {
+          "name": "Submit job (multipart — fileUrl)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "fileUrl",
+                  "type": "text",
+                  "value": "https://example.com/document.pdf",
+                  "description": "Public URL of the document."
+                },
+                {
+                  "key": "webhookUrl",
+                  "type": "text",
+                  "value": "",
+                  "description": "Optional."
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/jobs/submit",
+            "description": "Submit via **URL** (no file). Same endpoint as file upload; either `file` or `fileUrl` is required."
+          }
+        },
+        {
+          "name": "List jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/jobs",
+            "description": "Returns all jobs, newest first (when unfiltered)."
+          }
+        },
+        {
+          "name": "List jobs by status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/jobs?status=queued",
+            "description": "Change `status` query to one of: queued, processing, completed, failed."
+          }
+        },
+        {
+          "name": "Get job by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/jobs/{{jobId}}",
+            "description": "Poll for job status and result. Set collection variable `jobId` from a submit response."
+          }
+        }
+      ]
+    }
+  ]
+}
