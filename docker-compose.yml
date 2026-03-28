@@ -1,0 +1,81 @@
+# Loads variables from a project .env file for ${...} substitution (create from .env.example).
+# Dev: `docker compose watch` (or npm run docker:watch) rebuilds `api` when listed paths change.
+services:
+  postgres:
+    restart: unless-stopped
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: docprocessing
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d docprocessing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    restart: unless-stopped
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3000}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: docprocessing
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # AWS S3 — set in .env (same bucket/region/credentials you use locally)
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # Leave empty in .env for real AWS; set only for S3-compatible endpoints
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-}
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-10000}
+      THROTTLE_TTL_MS: ${THROTTLE_TTL_MS:-60000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    develop:
+      watch:
+        - path: ./src
+          action: rebuild
+        - path: ./package.json
+          action: rebuild
+        - path: ./package-lock.json
+          action: rebuild
+        - path: ./nest-cli.json
+          action: rebuild
+        - path: ./tsconfig.json
+          action: rebuild
+        - path: ./tsconfig.build.json
+          action: rebuild
+        - path: ./Dockerfile
+          action: rebuild
+
+volumes:
+  postgres_data:

@@ -41,6 +41,49 @@ Object storage is implemented in **`StorageModule`** via **`S3StorageService`**:
 - Redis 7+
 - S3-compatible bucket (AWS S3) and credentials
 
+For **Docker**, you only need Docker with the Compose plugin (Compose v2). The stack runs Postgres, Redis, and the API in containers; you still configure S3 credentials in `.env`.
+
+## Docker setup
+
+The repo includes a multi-stage `Dockerfile` (Node 22 Alpine) and `docker-compose.yml` that starts **PostgreSQL 16**, **Redis 7**, and the **API** with health-checked dependencies and a persistent Postgres volume.
+
+1. **Environment** — copy and edit `.env` (same as local; Compose overrides `DB_HOST` / `REDIS_HOST` for the API container):
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Set `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`. For AWS S3, leave `AWS_S3_ENDPOINT` empty. For MinIO or another S3-compatible service, set `AWS_S3_ENDPOINT` (see below if MinIO runs on your machine while the API runs in Docker).
+
+2. **Create the bucket** in S3 or MinIO before submitting jobs.
+
+3. **Start the stack**:
+
+   ```bash
+   npm run docker:up
+   ```
+
+   Or: `docker compose up --build`. The API listens on `http://localhost:${PORT:-3000}` (host port follows `PORT` in `.env`).
+
+4. **Stop**:
+
+   ```bash
+   npm run docker:down
+   ```
+
+### npm scripts
+
+| Script | Command |
+|--------|---------|
+| `npm run docker:build` | `docker compose build` |
+| `npm run docker:up` | `docker compose up --build` |
+| `npm run docker:watch` | `docker compose watch` — rebuilds the `api` image when `src/`, `package.json`, lockfile, or Nest/TS config changes |
+| `npm run docker:down` | `docker compose down` |
+
+### MinIO (or other S3) on the host
+
+If the API runs in Docker but object storage listens on `localhost` on your machine, use a host URL the container can reach, for example `http://host.docker.internal:9000` (Docker Desktop on macOS/Windows). Linux may require `extra_hosts` or the host’s LAN IP—see your Docker docs.
+
 ## Local Setup
 
 ### 1. Clone and install
