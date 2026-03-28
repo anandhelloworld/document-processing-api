@@ -9,6 +9,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -16,6 +17,8 @@ import { AppService } from './app.service';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+
+    RedisModule,
 
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],

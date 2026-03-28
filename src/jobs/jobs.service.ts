@@ -12,6 +12,7 @@ import { Job as JobEntity, JobStatus } from '../database/entities/job.entity';
 import { readFile } from 'fs/promises';
 import { CreateJobDto } from './dto/create-job.dto';
 import { S3StorageService } from '../storage/s3-storage.service';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class JobsService {
@@ -25,6 +26,8 @@ export class JobsService {
     private readonly documentQueue: Queue,
 
     private readonly s3Storage: S3StorageService,
+
+    private readonly redisService: RedisService,
   ) {}
 
   async createJob(
@@ -94,14 +97,24 @@ export class JobsService {
     );
 
     this.logger.log(`Job ${savedJob.id} added to queue`);
+    await this.redisService.setCachedJob(savedJob);
     return savedJob;
   }
 
   async getJobById(id: string): Promise<JobEntity> {
+    const cached = await this.redisService.getCachedJob(id);
+    if (cached) {
+      this.logger.log(`Job ${id} found in cache`);
+      return cached;
+    }
+
     const job = await this.jobRepository.findOne({ where: { id } });
     if (!job) {
       throw new NotFoundException(`Job ${id} not found`);
     }
+
+    await this.redisService.setCachedJob(job);
+    this.logger.log(`Job ${id} not found in cache, fetched from database`);
     return job;
   }
 
@@ -136,6 +149,7 @@ export class JobsService {
     if (errorMessage) update.errorMessage = errorMessage;
 
     await this.jobRepository.update(id, update);
+    await this.redisService.invalidateJobCache(id);
     this.logger.log(`Job ${id} status updated to ${status}`);
   }
 }
