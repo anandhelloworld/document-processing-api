@@ -13,6 +13,8 @@ Client → NestJS API → S3-compatible storage (AWS S3 / MinIO)
     BullMQ Queue (Redis) → Worker → GetObject from S3 → process
                                          ↓
                                PostgreSQL + Webhook Callback
+
+GET /api/jobs/:id  →  RedisService (job:by-id cache) → PostgreSQL on miss
 ```
 
 ### Flow
@@ -21,7 +23,7 @@ Client → NestJS API → S3-compatible storage (AWS S3 / MinIO)
 3. Job is pushed into BullMQ backed by Redis
 4. Worker loads the file from S3 with `S3StorageService.getFile`, marks the job `processing`, and runs processing (currently simulated 10–20s)
 5. On completion, result is saved to the DB and the webhook is fired to the client
-6. Client polls `GET /api/jobs/:id` for status and result
+6. Client polls `GET /api/jobs/:id` for status and result. Responses are served from **Redis** when a cached copy exists (same shape whether the job was submitted with `file` or `fileUrl`); otherwise the API loads from PostgreSQL and refreshes the cache.
 
 Object storage is implemented in **`StorageModule`** via **`S3StorageService`**: `addFile`, `addFileFromUrl`, `getFile`, and `deleteFile`.
 
@@ -29,7 +31,7 @@ Object storage is implemented in **`StorageModule`** via **`S3StorageService`**:
 
 - **NestJS** — backend framework
 - **BullMQ + Bull** — job queue and worker management
-- **Redis** — queue backend (BullMQ storage)
+- **Redis** — BullMQ queue storage plus **`RedisService`** JSON cache for `GET /api/jobs/:id` (keys `job:by-id:{uuid}`, TTL 300s; invalidated when job status is updated)
 - **PostgreSQL + TypeORM** — job persistence
 - **Amazon S3 API** (`@aws-sdk/client-s3`) — document storage (AWS S3 or MinIO via `AWS_S3_ENDPOINT`)
 - **Axios** — remote `fileUrl` fetch and webhook HTTP callbacks
@@ -178,6 +180,8 @@ Response:
 GET /api/jobs/:id
 ```
 
+**Caching:** `RedisService` stores the serialized job row under `job:by-id:{id}` for up to **5 minutes**. The cache is cleared whenever the worker updates job status (e.g. `processing`, `completed`, `failed`), so polling usually sees fresh state after transitions. First request after a miss (or expiry) hits PostgreSQL and repopulates Redis. This applies to all jobs, including those created with a remote **`fileUrl`**.
+
 Response:
 ```json
 {
@@ -237,7 +241,9 @@ queued → processing → completed
 
 6. **synchronize: true** — used in development for auto table creation. In production this should be replaced with TypeORM migrations
 
-7. **S3-compatible object storage** — binaries are not held in Redis or Postgres; the API writes to a bucket and the worker reads via `storedObjectKey`. Use real AWS S3 in production or MinIO locally (`AWS_S3_ENDPOINT`)
+7. **S3-compatible object storage** — binaries are not held in Redis or Postgres; the API writes to a bucket and the worker reads via `storedObjectKey`. Use real AWS S3 in production.
+
+8. **Redis job cache** — `GET /api/jobs/:id` uses `RedisService` to reduce PostgreSQL load on repeated polls; only job metadata and results are cached (not file bytes). Invalidation runs on every status update so completed/failed results are not stuck behind stale cache.
 
 ## Assumptions
 
